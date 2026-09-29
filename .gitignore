@@ -1,0 +1,66 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.agents
+skills-lock.json
+.opencode
+
+# Rust / Tauri build artifacts
+src-tauri/target/
+src-tauri/resources/
+*.pdb
+*.partial
+
+# Env
+.env
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Executables & installers (never commit)
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.app
+*.blockmap
+
+# Tauri bundle output
+src-tauri/bundle/
+src-tauri/WixTools/
+src-tauri/Frameworks/
+
+# Code signing (if used)
+*.p12
+*.cer
+*.pfx
+
+# Research paper (never commit)
+paper/
+
+# Session transcripts (never commit)
+session-*.md
+
+# Signing keys (never commit)
+*.key
+*.key.pub

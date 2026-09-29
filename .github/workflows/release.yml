@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            platform: windows-latest
+            args: ""
+            rust-targets: ""
+          - name: macos-arm64
+            platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            rust-targets: aarch64-apple-darwin
+          - name: macos-x64
+            platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            rust-targets: x86_64-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and create draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: SAFBuilder ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+          releaseBody: |
+            ## SAFBuilder ${{ github.ref_name }}
+
+            Desktop tool for building DSpace Simple Archive Format (SAF) packages and batch metadata CSV files, with a Dublin Core metadata editor.
+
+            ### Downloads
+
+            | Platform | Files |
+            |----------|-------|
+            | Windows  | `*_x64-setup.exe` (NSIS installer) or `*_x64_en-US.msi` (WiX installer) |
+            | macOS    | `*.dmg` for Apple Silicon (`arm64`) and Intel (`x64`), unsigned: right-click → Open on first launch |
+
+            ### Highlights
+
+            - Dual output modes: SAF ZIP packages and DSpace batch metadata CSV
+            - Spreadsheet importer (CSV/TSV/XLSX/XLS) with column auto-mapping and live preview
+            - 86-field Dublin Core editor (DC, DCTERMS, DSpace entity type, legacy thesis fields)
+            - Built-in Dublin Core reference browser, dark mode, toast notifications, error boundary
+            - Automatic updates: the app checks GitHub Releases for new versions on launch
+            - Tauri 2 + React 19; Rust backend with 21 unit tests
+
+            See the README for usage, security notes, and build instructions.

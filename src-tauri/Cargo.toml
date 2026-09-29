@@ -1,0 +1,25 @@
+[package]
+name = "saf-builder"
+version = "1.0.0"
+description = "DSpace SAF Package Builder - Batch upload tool for DSpace repositories"
+authors = ["Joyjit Chowdhury"]
+edition = "2021"
+
+[lib]
+name = "saf_builder_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+quick-xml = { version = "0.42", features = [] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
