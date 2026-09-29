@@ -6,6 +6,8 @@ A modern desktop application for creating DSpace Simple Archive Format (SAF) pac
 
 Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 
+![SAFBuilder welcome screen](docs/screenshots/welcome-screen.png)
+
 ## Features
 
 ### Dual Output Modes
@@ -17,6 +19,8 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 - **Duplicate Detection** — Prevents the same file from being added twice (toast notification)
 - **Spreadsheet Importer** — Upload a CSV/TSV/XLSX/XLS with item metadata. Auto-maps columns to DC fields (`title`, `author`, `date`, `category`, etc.) using header heuristics. Live preview shows the first 100 mapped items before import. Accepts comma- or tab-delimited files (delimiter auto-detected).
 - **Add/Remove Items** (CSV mode) — `+ Add Item` button adds empty rows, per-row `X` removes items
+
+![Spreadsheet importer with column auto-mapping and live preview](docs/screenshots/spreadsheet-importer.png)
 
 ### Dublin Core Metadata
 - **86 Predefined Fields** — 68 DC + 12 DCTERMS + 5 thesis (legacy) + 1 DSpace entity type, each with full description and example
@@ -48,6 +52,8 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 - **Animations** — Framer Motion (`motion/react`) for screen transitions, list staggers, progress reveals, modal fade-in
 - **Accessibility** — Modal dialogs have `role="dialog"` + `aria-modal` + Escape to close; file picker has full keyboard nav; field search uses ARIA `combobox`/`listbox`/`option` semantics; all interactive elements have descriptive `aria-label`s
 - **Automatic Updates** — Checks GitHub Releases on launch for a newer version; the footer version number is the update control — click it to check for updates, and a pulsing dot appears beside it whenever a newer version is available (even after dismissing the dialog). The dialog shows release notes, live download progress, and a one-click restart. Updates are Ed25519-signed and verified before install.
+
+![SAFBuilder in dark mode](docs/screenshots/dark-mode.png)
 
 ## Tech Stack
 
@@ -186,6 +192,8 @@ For each file, search and add Dublin Core fields using the searchable dropdown. 
 
 Use **Copy from** to copy metadata between files with shared fields (same author, date, etc.).
 
+![Metadata editor with searchable Dublin Core field picker](docs/screenshots/saf-flow.png)
+
 ##### Specialized Field Inputs
 
 - **`dc.date.*`** — Calendar picker with Today/Clear shortcuts. Stored as ISO `YYYY-MM-DD`. Free-text fallback for partial dates (`YYYY`, `YYYY-MM`) which are normalized to ISO.
@@ -195,6 +203,8 @@ Use **Copy from** to copy metadata between files with shared fields (same author
 #### Dublin Core Reference
 
 Click **Dublin Core Docs** in the header to open the reference browser. Left panel: searchable list of all 85 fields grouped by element (Title, Contributor, Coverage, etc.). Click a field to see its details on the right: header code, schema badge (`dc` / `dcterms` / `dspace` / `thesis`), element/qualifier/label, full description, and example value. Both panels scroll independently within a fixed-height container.
+
+![Dublin Core reference browser with field details](docs/screenshots/dublin-core-reference.png)
 
 #### Step 3: Generate ZIP
 
@@ -253,6 +263,8 @@ Select an output folder and click **Generate CSV**. The app generates a `dspace_
 - Formula-injection escape: cells starting with `=`, `+`, `-`, `@`, `\t`, `\r` get a `'` prefix
 
 On success: shows item count and CSV path, with **Open Output Folder** and **Start Over**. Import the CSV into DSpace via the Administrative > Batch Metadata Import interface.
+
+![Generation success screen with open output folder](docs/screenshots/success-screen.png)
 
 ---
 
