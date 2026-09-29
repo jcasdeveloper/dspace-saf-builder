@@ -352,15 +352,6 @@ cargo clippy --all-targets --locked -- -D warnings   # Lint (must pass clean)
 
 Default window: 1200×800 (min 900×600), centered, resizable, **maximized on launch**. See `src-tauri/tauri.conf.json`.
 
-## Changelog
-
-### v1.0.0 — Initial public release
-- Dual output modes: SAF ZIP packages and DSpace batch metadata CSV
-- Spreadsheet importer (CSV/TSV/XLSX/XLS) with column auto-mapping and live preview
-- 86-field Dublin Core editor (DC, DCTERMS, DSpace entity type, legacy thesis fields) with searchable picker, date picker, and type dropdowns
-- Built-in Dublin Core reference browser, dark mode, toast notifications, and error boundary
-- Tauri 2 + React 19 desktop app (Windows/macOS); Rust backend with 21 unit tests
-
 ## License
 
 Released under the [MIT License](LICENSE).
