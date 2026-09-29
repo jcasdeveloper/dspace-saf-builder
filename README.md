@@ -47,7 +47,7 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 - **Error Boundary** — Catches render errors with a "Reload App" fallback
 - **Animations** — Framer Motion (`motion/react`) for screen transitions, list staggers, progress reveals, modal fade-in
 - **Accessibility** — Modal dialogs have `role="dialog"` + `aria-modal` + Escape to close; file picker has full keyboard nav; field search uses ARIA `combobox`/`listbox`/`option` semantics; all interactive elements have descriptive `aria-label`s
-- **Automatic Updates** — Checks GitHub Releases on launch for a newer version; "Check for updates" button in the header; dialog shows release notes, live download progress, and a one-click restart. Updates are Ed25519-signed and verified before install.
+- **Automatic Updates** — Checks GitHub Releases on launch for a newer version; the footer version number is the update control — click it to check for updates, and a pulsing dot appears beside it whenever a newer version is available (even after dismissing the dialog). The dialog shows release notes, live download progress, and a one-click restart. Updates are Ed25519-signed and verified before install.
 
 ## Tech Stack
 
@@ -110,23 +110,23 @@ Download the installer for your platform from the
 | Platform | Files |
 |----------|-------|
 | Windows | `*_x64-setup.exe` (NSIS) or `*_x64_en-US.msi` (WiX) |
-| macOS | `*.dmg` — universal (Apple Silicon + Intel), unsigned: right-click → Open on first launch |
+| macOS | `*_aarch64.dmg` (Apple Silicon) or `*_x64.dmg` (Intel), unsigned: right-click → Open on first launch |
 
 Local builds also produce installers under:
 
 ```
 src-tauri/target/release/bundle/
 ├── nsis/
-│   └── SAFBuilder by Joyjit Chowdhury_1.0.0_x64-setup.exe   (Windows, branded NSIS)
+│   └── SAFBuilder by Joyjit Chowdhury_<version>_x64-setup.exe   (Windows, branded NSIS)
 └── msi/
-    └── SAFBuilder by Joyjit Chowdhury_1.0.0_x64_en-US.msi   (Windows, WiX)
+    └── SAFBuilder by Joyjit Chowdhury_<version>_x64_en-US.msi   (Windows, WiX)
 ```
 
 ### From Source
 
 ```bash
-git clone <repository-url>
-cd saf-builder
+git clone https://github.com/jcasdeveloper/dspace-saf-builder.git
+cd dspace-saf-builder
 npm install
 npm run tauri dev
 ```
@@ -153,7 +153,7 @@ This produces platform-specific installers:
 
 ## Updates
 
-The app checks GitHub Releases for new versions — silently on launch, or on demand via the header's **Check for updates** button. To ship an update:
+The app checks GitHub Releases for new versions — silently on launch, or on demand by clicking the version number in the footer. To ship an update:
 
 1. Bump the version in `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`
 2. Commit, tag `vX.Y.Z`, and push the tag
@@ -278,8 +278,8 @@ saf-builder/
 │   ├── styles/
 │   │   └── globals.css                   # Tailwind theme tokens (light + dark), 6 Geist @font-face, scrollbar
 │   └── components/
-│       ├── Header.tsx                    # App header: siteicon.svg logo (w-12) + theme toggle + Dublin Core Docs button
-│       ├── Footer.tsx                    # Version (from package.json) + credits
+│       ├── Header.tsx                    # App header: siteicon.svg logo (w-16) + theme toggle + Dublin Core Docs button
+│       ├── Footer.tsx                    # Credits + interactive version (update check, pulsing badge when update pending)
 │       ├── ModeSelector.tsx              # Welcome screen: choose SAF ZIP or Metadata CSV mode
 │       ├── StepIndicator.tsx             # 3-step (SAF) or 2-step (CSV) progress indicator
 │       ├── FilePicker.tsx                # SAF Step 1: file selection + empty state + duplicate detection
