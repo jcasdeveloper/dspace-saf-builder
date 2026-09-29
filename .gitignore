@@ -64,3 +64,6 @@ session-*.md
 # Signing keys (never commit)
 *.key
 *.key.pub
+
+#AGENTS.md
+AGENTS.md
