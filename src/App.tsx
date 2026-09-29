@@ -71,9 +71,13 @@ function App() {
     void checkForUpdates(false);
   }, [checkForUpdates]);
 
-  const handleUpdatesClick = useCallback(() => {
-    void checkForUpdates(true);
-  }, [checkForUpdates]);
+  const handleVersionClick = useCallback(() => {
+    if (pendingUpdate) {
+      setUpdateDialogOpen(true);
+    } else {
+      void checkForUpdates(true);
+    }
+  }, [pendingUpdate, checkForUpdates]);
 
   const goToStep = useCallback((from: AppStep, to: AppStep) => {
     const order = stepOrder;
@@ -176,8 +180,6 @@ function App() {
       <div className="flex h-screen flex-col bg-background">
       <Header
         onDocsClick={handleDocsClick}
-        onUpdatesClick={handleUpdatesClick}
-        checkingUpdate={checkingUpdate}
       />
       <div
         className={`mx-auto flex w-full max-w-[1440px] flex-1 flex-col px-6 py-6 ${
@@ -300,7 +302,11 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </div>
-      <Footer />
+      <Footer
+        checkingUpdate={checkingUpdate}
+        updateVersion={pendingUpdate ? pendingUpdate.version : null}
+        onVersionClick={handleVersionClick}
+      />
       <AnimatePresence>
         {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
       </AnimatePresence>

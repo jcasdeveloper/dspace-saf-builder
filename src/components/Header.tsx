@@ -1,16 +1,14 @@
 import { memo } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpenText, Moon, RefreshCw, Sun } from "lucide-react";
+import { BookOpenText, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 
 interface HeaderProps {
   onDocsClick: () => void;
-  onUpdatesClick: () => void;
-  checkingUpdate: boolean;
 }
 
-function Header({ onDocsClick, onUpdatesClick, checkingUpdate }: HeaderProps) {
+function Header({ onDocsClick }: HeaderProps) {
   const { theme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -56,24 +54,6 @@ function Header({ onDocsClick, onUpdatesClick, checkingUpdate }: HeaderProps) {
                 )}
               </motion.span>
             </AnimatePresence>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onUpdatesClick}
-            disabled={checkingUpdate}
-            aria-label={
-              checkingUpdate ? "Checking for updates" : "Check for updates"
-            }
-            title={
-              checkingUpdate ? "Checking for updates…" : "Check for updates"
-            }
-            className="shrink-0 text-white/85 hover:text-white hover:bg-white/15"
-          >
-            <RefreshCw
-              className={`size-4 ${checkingUpdate ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
           </Button>
           <Button
             variant="ghost"
