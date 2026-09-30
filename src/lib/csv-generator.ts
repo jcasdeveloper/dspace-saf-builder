@@ -48,9 +48,6 @@ export function generateMetadataCsv(items: FileMetadata[]): string {
 }
 
 function escapeCsvField(value: string): string {
-  if (/^[=+\-@\t\r]/.test(value)) {
-    value = "'" + value;
-  }
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
     return `"${value.replace(/"/g, '""')}"`;
   }

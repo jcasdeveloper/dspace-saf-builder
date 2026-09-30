@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import type { MappingConfig, FileMetadata, MetadataEntry } from "../types";
 
 export interface ParsedSpreadsheet {
@@ -103,20 +103,42 @@ function inferColumnCount(cells: string[], delim: string): number {
   return maxCols || 1;
 }
 
-export function parseExcel(buffer: ArrayBuffer): ParsedSpreadsheet {
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return { headers: [], rows: [], totalRows: 0, warnings: [] };
+export async function parseExcel(buffer: ArrayBuffer): Promise<ParsedSpreadsheet> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) return { headers: [], rows: [], totalRows: 0, warnings: [] };
 
-  const sheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
+  const sheetValues = worksheet.getSheetValues() as unknown as (unknown | null)[][];
+  if (!sheetValues || sheetValues.length === 0) {
+    return { headers: [], rows: [], totalRows: 0, warnings: [] };
+  }
 
-  if (data.length === 0) return { headers: [], rows: [], totalRows: 0, warnings: [] };
+  const cellToString = (cell: unknown): string => {
+    if (cell === null || cell === undefined) return "";
+    if (cell instanceof Date) return cell.toISOString();
+    if (typeof cell === "object") {
+      const r = cell as { text?: unknown; richText?: Array<{ text?: unknown }> };
+      if (typeof r.text === "string") return r.text;
+      if (Array.isArray(r.richText)) return r.richText.map((p) => String(p.text ?? "")).join("");
+    }
+    return String(cell);
+  };
 
-  const headers = (data[0] || []).map((h) => String(h).trim()).filter((h) => h.length > 0);
-  const rows = data.slice(1).map((r) =>
-    headers.map((_, i) => String(r[i] ?? "").trim())
-  );
+  // ExcelJS getSheetValues() is 1-indexed: result[N] is row N, and each
+  // row's column 0 is a null placeholder. So the header row lives at index 1,
+  // and each row's content starts at column index 1.
+  const headerRow = sheetValues[1] || [];
+  const headers = headerRow.map((c) => cellToString(c).trim()).filter((h) => h.length > 0);
+
+  // Drop rows that are entirely empty. Workbooks styled to a large
+  // dimension (e.g. dimension ref="A1:L638") will otherwise report every
+  // styled-empty trailing row as a "row", which causes the importer to
+  // show hundreds of false rows and floods the column-count warning panel.
+  const rows = sheetValues
+    .slice(2)
+    .map((row) => headers.map((_, i) => cellToString(row?.[i + 1]).trim()))
+    .filter((r) => r.some((cell) => cell.length > 0));
 
   return { headers, rows, totalRows: rows.length, warnings: [] };
 }
@@ -129,7 +151,7 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedSpreadshee
     return parseCsv(text);
   }
 
-  if (ext === "xlsx" || ext === "xls") {
+  if (ext === "xlsx") {
     const buffer = await file.arrayBuffer();
     return parseExcel(buffer);
   }

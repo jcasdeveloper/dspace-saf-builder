@@ -17,7 +17,7 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 ### File Selection & Spreadsheet Import
 - **File Selection** — Pick multiple bitstreams via native OS dialog with per-type icons (PDF, DOC/DOCX, PNG/JPG/GIF, MP4, TXT, CSV) and color coding
 - **Duplicate Detection** — Prevents the same file from being added twice (toast notification)
-- **Spreadsheet Importer** — Upload a CSV/TSV/XLSX/XLS with item metadata. Auto-maps columns to DC fields (`title`, `author`, `date`, `category`, etc.) using header heuristics. Live preview shows the first 100 mapped items before import. Accepts comma- or tab-delimited files (delimiter auto-detected).
+- **Spreadsheet Importer** — Upload a `.csv`, `.tsv`, or `.xlsx` file with item metadata. Auto-maps columns to DC fields (`title`, `author`, `date`, `category`, etc.) using header heuristics. Live preview shows the first 100 mapped items before import. Accepts comma- or tab-delimited files (delimiter auto-detected). Legacy `.xls` files can be resaved as `.xlsx` from any spreadsheet app.
 - **Add/Remove Items** (CSV mode) — `+ Add Item` button adds empty rows, per-row `X` removes items
 
 ![Spreadsheet importer with column auto-mapping and live preview](docs/screenshots/spreadsheet-importer.png)
@@ -39,7 +39,7 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 
 ### Output
 - **ZIP Output** — Generates `saf_package.zip` with structured `item_NNN/` directories
-- **CSV Output** — Generates `dspace_metadata_import.csv` (DSpace format: `+`, `id`, `collection` columns; field columns sorted with required fields first; values separated by `||`; formula-injection escaped with `'` prefix)
+- **CSV Output** — Generates `dspace_metadata_import.csv` (DSpace format: `+`, `id`, `collection` columns; field columns sorted with required fields first; values separated by `||`; values written verbatim — matches DSpace's official batch metadata format exactly, RFC4180 quoting + UTF-8)
 - **Open Output Folder** — Reveal the generated file in the OS file manager (via `plugin-opener`)
 - **Progress Bar** — Visual feedback during generation (capped at 90% while awaiting backend; jumps to 100% on completion)
 - **Error Reporting** — Per-file errors surfaced on the success screen; generation failures shown inline (no jarring alerts)
@@ -71,7 +71,7 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 | Tauri Plugins | `plugin-dialog` (file picker), `plugin-opener` (open folder), `plugin-updater` (signed auto-updates), `plugin-process` (restart after update) |
 | XML Generation | quick-xml 0.42 |
 | ZIP Creation | zip 8 (Deflate) |
-| Spreadsheet Parsing | xlsx 0.18.5 (lazy-loaded inside CSV-mode chunks only) |
+| Spreadsheet Parsing | exceljs (lazy-loaded inside CSV-mode chunks only) |
 | Date Utilities | date-fns 4 (`format`, `parseISO`) + `react-day-picker` |
 | Installer | NSIS (setup.exe) + WiX (MSI) with custom `header.bmp` / `sidebar.bmp` branding, `downloadBootstrapper` WebView2 |
 | Window | 1200×800 (min 900×600), centered, resizable, maximized on launch |
@@ -82,10 +82,10 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
 - **Strict CSP** — `script-src 'self'`; no inline scripts; `connect-src ipc: http://ipc.localhost` only (no telemetry, no analytics)
 - **Path-traversal protection** — backend validates filenames (`/`/`\`/`..` rejected), headers (alphanumeric + `_`/`-`), and project paths before any I/O
 - **XML injection-safe** — uses `quick_xml::Writer` event API with proper attribute/text escaping; no string concatenation
-- **CSV formula-injection escaped** — cells starting with `=`, `+`, `-`, `@`, `\t`, `\r` get a `'` prefix (OWASP recommendation)
 - **No shell execution** — verified: zero `Command::new`, `system(`, `exec(`, `eval`, `dangerouslySetInnerHTML` calls in the codebase
 - **Input validation** — all user inputs validated at the IPC boundary with typed structs (no string-typed command dispatch)
 - **Signed updates** — update bundles are Ed25519-signed in CI; the app verifies the signature against a pinned public key before installing, so a compromised release channel cannot inject code
+- **Upload format validation** — the Rust backend checks every uploaded file: extension whitelist (`.csv`, `.tsv`, `.xlsx`), 100 MB size cap, and a magic-byte check (OOXML zip signature + `[Content_Types].xml` for `.xlsx`; UTF-8 sniff + non-empty header for text). Renamed or malformed files are rejected before parsing.
 
 ## Prerequisites
 
@@ -244,7 +244,7 @@ Each item shows its filename (`Item 1`, `Item 2`, … by default; renamed to spr
 
 Click **Import from Spreadsheet** to open the importer modal:
 
-1. **Upload** — Drop or pick a `.csv`, `.tsv`, `.xlsx`, or `.xls` file. The file is parsed client-side; tab/comma delimiter is auto-detected for CSV/TSV.
+1. **Upload** — Drop or pick a `.csv`, `.tsv`, or `.xlsx` file. The file is parsed client-side (the backend validates the file's format and size before parsing); tab/comma delimiter is auto-detected for CSV/TSV.
 2. **Map & Preview** — Each spreadsheet column is auto-mapped to a DC field using header heuristics (`title`/`thesis`/`report` → `dc.title`; `author`/`submitted by`/`supervisor` → `dc.contributor.author`; `date`/`submission` → `dc.date.issued`; etc.). Override any column's mapping via the searchable dropdown. Required: provide a **Collection Handle** (e.g., `123456789/1`).
 3. **Import** — The first 100 mapped items are shown in a live preview; click **Import N items** to commit.
 
@@ -260,7 +260,7 @@ Select an output folder and click **Generate CSV**. The app generates a `dspace_
 
 - Header row: `id`, `collection`, then all field columns (required fields first, then alphabetical)
 - Each item row: `+` (insert marker), collection handle, then each field's values joined with `||`
-- Formula-injection escape: cells starting with `=`, `+`, `-`, `@`, `\t`, `\r` get a `'` prefix
+- Official format: values are written verbatim with RFC4180 quoting (UTF-8) — the insert marker stays `+`, exactly as DSpace's `metadata-import` expects
 
 On success: shows item count and CSV path, with **Open Output Folder** and **Start Over**. Import the CSV into DSpace via the Administrative > Batch Metadata Import interface.
 
@@ -282,8 +282,8 @@ saf-builder/
 │   │   └── entity-type-values.ts         # 10 DSpace entity types for dspace.entity.type dropdown
 │   ├── lib/
 │   │   ├── animations.ts                 # Framer Motion variants (fadeIn, scaleIn, slideUp, stepPop, screenSlide, stagger)
-│   │   ├── csv-generator.ts              # DSpace CSV format generation + hasRequiredFields validation + formula-injection escape
-│   │   ├── spreadsheet-parser.ts         # CSV/TSV (delimiter sniffing) + XLSX/XLS parser, autoMapColumn heuristics, applyMapping
+│   │   ├── csv-generator.ts              # DSpace CSV format generation (RFC4180, official format) + hasRequiredFields validation
+│   │       ├── spreadsheet-parser.ts         # CSV/TSV (delimiter sniffing) + XLSX parser (ExcelJS), autoMapColumn heuristics, applyMapping
 │   │   └── useFieldChange.ts             # Shared hook for metadata field editing logic
 │   ├── utils/
 │   │   └── fileIcons.ts                  # File type icon paths + color coding (PDF, DOC, PNG, etc.)
@@ -330,7 +330,7 @@ saf-builder/
 │   ├── icon.png                          # App icon + favicon (source for `tauri icon`)
 │   ├── siteicon.svg                      # Header branding (SAFBuilder mark)
 │   └── fonts/                            # Geist Sans/Mono woff2 (6 files)
-├── package.json                          # Node deps (xlsx, motion, react 19, tailwindcss 4, vite 8, tauri 2)
+├── package.json                          # Node deps (exceljs, motion, react 19, tailwindcss 4, vite 8, tauri 2)
 ├── vite.config.ts                        # Vite 8 + Rolldown + @tailwindcss/vite, port 1420, code-split groups
 └── README.md
 ```

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
@@ -443,6 +443,80 @@ fn generate_metadata_csv_inner(csv_content: String, output_dir: String) -> Resul
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Request body for [`validate_upload_bytes`] — the raw bytes of an uploaded
+/// file plus the extension the user picked it as.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadValidationRequest {
+    bytes: Vec<u8>,
+    claimed_extension: String,
+}
+
+/// Validates an uploaded spreadsheet file: size cap, extension whitelist,
+/// and a magic-byte check against the claimed format.
+#[tauri::command]
+fn validate_upload_bytes(req: UploadValidationRequest) -> std::result::Result<(), String> {
+    validate_upload(&req.bytes, &req.claimed_extension).map_err(|e| format!("{e:#}"))
+}
+
+fn validate_upload(bytes: &[u8], claimed_extension: &str) -> Result<()> {
+    if bytes.is_empty() {
+        bail!("File is empty");
+    }
+    if bytes.len() as u64 > MAX_FILE_SIZE {
+        bail!("File exceeds the 100 MB size limit");
+    }
+
+    let ext = claimed_extension
+        .trim()
+        .trim_start_matches('.')
+        .to_lowercase();
+    let allowed = ["csv", "tsv", "xlsx"];
+    if !allowed.contains(&ext.as_str()) {
+        bail!("Unsupported file extension: .{ext}");
+    }
+
+    match ext.as_str() {
+        "xlsx" => {
+            if bytes.len() < 4 || &bytes[..4] != b"PK\x03\x04" {
+                bail!("File extension is .xlsx but content is not a valid OOXML (zip) archive");
+            }
+            let cursor = Cursor::new(bytes);
+            let mut archive = zip::ZipArchive::new(cursor)
+                .context("Failed to open .xlsx as a zip archive")?;
+            let mut has_content_types = false;
+            for i in 0..archive.len() {
+                let entry = archive
+                    .by_index(i)
+                    .with_context(|| format!("Failed to read zip entry {i}"))?;
+                if entry.name().eq_ignore_ascii_case("[Content_Types].xml") {
+                    has_content_types = true;
+                    break;
+                }
+            }
+            if !has_content_types {
+                bail!("Zip archive is missing [Content_Types].xml — not a valid .xlsx file");
+            }
+            Ok(())
+        }
+        "csv" | "tsv" => {
+            let text = std::str::from_utf8(bytes)
+                .context("File is not valid UTF-8 text")?;
+            if text
+                .lines()
+                .next()
+                .map(str::trim)
+                .map(str::is_empty)
+                .unwrap_or(true)
+            {
+                bail!("Text file is empty or has no header line");
+            }
+            Ok(())
+        }
+        _ => unreachable!("extension whitelist enforced above"),
+    }
+}
+
 /// Launches the Tauri application with the opener/dialog plugins and the
 /// [`generate_saf`] command handler.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -452,7 +526,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![generate_saf, generate_metadata_csv])
+        .invoke_handler(tauri::generate_handler![generate_saf, generate_metadata_csv, validate_upload_bytes])
         .run(tauri::generate_context!())
         // SAFETY: Tauri's `run()` never returns `Ok`; there is no meaningful
         // recovery at the process entry point, so panicking is acceptable.
@@ -617,5 +691,99 @@ mod parse_item_fields_tests {
             dc[0],
             ("contributor".to_string(), "author".to_string(), "Jane Doe".to_string())
         );
+    }
+}
+
+#[cfg(test)]
+mod validate_upload_tests {
+    use super::*;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+
+    fn build_minimal_xlsx() -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let cursor = Cursor::new(&mut buf);
+            let mut zip = zip::ZipWriter::new(cursor);
+            let opts = SimpleFileOptions::default();
+            zip.start_file("[Content_Types].xml", opts).unwrap();
+            zip.write_all(b"<?xml version=\"1.0\"?><Types/>").unwrap();
+            zip.finish().unwrap();
+        }
+        buf
+    }
+
+    #[test]
+    fn accept_csv() {
+        let bytes = b"title,author\nFoo,Bar\n".to_vec();
+        validate_upload(&bytes, "csv").unwrap();
+    }
+
+    #[test]
+    fn accept_tsv() {
+        let bytes = b"title\tauthor\nFoo\tBar\n".to_vec();
+        validate_upload(&bytes, "tsv").unwrap();
+    }
+
+    #[test]
+    fn accept_xlsx_with_content_types() {
+        let bytes = build_minimal_xlsx();
+        validate_upload(&bytes, "xlsx").unwrap();
+    }
+
+    #[test]
+    fn reject_unknown_extension() {
+        let bytes = b"some data".to_vec();
+        let err = validate_upload(&bytes, "exe").unwrap_err().to_string();
+        assert!(err.contains("Unsupported file extension"), "got: {err}");
+    }
+
+    #[test]
+    fn reject_renamed_exe_as_xlsx() {
+        let bytes = b"MZ\x90\x00not-an-xlsx".to_vec();
+        let err = validate_upload(&bytes, "xlsx").unwrap_err().to_string();
+        assert!(
+            err.contains("not a valid OOXML"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn reject_zip_without_content_types() {
+        let mut buf = Vec::new();
+        {
+            let cursor = Cursor::new(&mut buf);
+            let mut zip = zip::ZipWriter::new(cursor);
+            let opts = SimpleFileOptions::default();
+            zip.start_file("readme.txt", opts).unwrap();
+            zip.write_all(b"hello").unwrap();
+            zip.finish().unwrap();
+        }
+        let err = validate_upload(&buf, "xlsx").unwrap_err().to_string();
+        assert!(
+            err.contains("[Content_Types].xml"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn reject_empty_file() {
+        let bytes = Vec::new();
+        let err = validate_upload(&bytes, "csv").unwrap_err().to_string();
+        assert!(err.contains("empty"), "got: {err}");
+    }
+
+    #[test]
+    fn reject_oversize() {
+        let bytes = vec![b'a'; (MAX_FILE_SIZE as usize) + 1];
+        let err = validate_upload(&bytes, "csv").unwrap_err().to_string();
+        assert!(err.contains("100 MB"), "got: {err}");
+    }
+
+    #[test]
+    fn reject_non_utf8_csv() {
+        let bytes = vec![0xff, 0xfe, 0xfd];
+        let err = validate_upload(&bytes, "csv").unwrap_err().to_string();
+        assert!(err.contains("UTF-8"), "got: {err}");
     }
 }

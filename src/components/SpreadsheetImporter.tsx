@@ -11,6 +11,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,18 @@ function SpreadsheetImporter({
     setIsParsing(true);
     setParseError(null);
     try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      try {
+        await invoke("validate_upload_bytes", {
+          req: { bytes: Array.from(bytes), claimedExtension: ext },
+        });
+      } catch (validationErr: unknown) {
+        const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
+        setParseError(`Unsupported file: ${msg}`);
+        return;
+      }
+
       const result = await parseSpreadsheetFile(file);
       setParsed(result);
       setFileName(file.name);
@@ -185,7 +198,7 @@ function SpreadsheetImporter({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls,.tsv"
+                  accept=".csv,.xlsx,.tsv"
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -198,8 +211,9 @@ function SpreadsheetImporter({
                   ) : (
                     <>
                       <Upload className="mb-4 size-10 text-muted-foreground/50" strokeWidth={1.5} aria-hidden="true" />
-                      <p className="mb-2 text-sm font-medium">Click to upload CSV or Excel file</p>
-                      <p className="text-xs text-muted-foreground">Supports .csv, .xlsx, .xls</p>
+                      <p className="mb-2 text-sm font-medium">Click to upload CSV, TSV, or Excel file</p>
+                      <p className="text-xs text-muted-foreground">Supports .csv, .tsv, .xlsx</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Need to upload .xls? Open in Excel/LibreOffice and resave as .xlsx</p>
                     </>
                   )}
                 </div>
