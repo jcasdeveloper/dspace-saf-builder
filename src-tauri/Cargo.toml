@@ -1,6 +1,6 @@
 [package]
 name = "saf-builder"
-version = "1.1.0"
+version = "1.1.1"
 description = "DSpace SAF Package Builder - Batch upload tool for DSpace repositories"
 authors = ["Joyjit Chowdhury"]
 edition = "2021"
