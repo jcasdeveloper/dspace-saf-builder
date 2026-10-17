@@ -30,7 +30,7 @@ Built with Tauri 2.0, React 19, and Tailwind CSS 4.
   - `dc.date.*` fields use a calendar `DatePicker` (with Today/Clear)
   - `dc.type` uses a dropdown of 29 DCMI Type Vocabulary values
   - `dspace.entity.type` uses a dropdown of 10 DSpace entity types
-- **Multi-Value Support** — Add multiple values per field (e.g., multiple authors separated by `,` or `;`)
+- **Multi-Value Support** — Add multiple values per field. In spreadsheet imports, separate multiple names with a semicolon (`;`) — commas are preserved for names written as "Lastname, Firstname"
 - **Copy Metadata** — Copy metadata from one file to another via the `Copy from` dropdown (SAF mode)
 - **Status Indicators** — Red/yellow/green dot per file:
   - Red — no metadata yet
@@ -123,9 +123,9 @@ Local builds also produce installers under:
 ```
 src-tauri/target/release/bundle/
 ├── nsis/
-│   └── SAFBuilder by Joyjit Chowdhury_<version>_x64-setup.exe   (Windows, branded NSIS)
+│   └── SAFBuilder_<version>_x64-setup.exe   (Windows, branded NSIS)
 └── msi/
-    └── SAFBuilder by Joyjit Chowdhury_<version>_x64_en-US.msi   (Windows, WiX)
+    └── SAFBuilder_<version>_x64_en-US.msi   (Windows, WiX)
 ```
 
 ### From Source
@@ -196,7 +196,7 @@ Use **Copy from** to copy metadata between files with shared fields (same author
 
 ##### Specialized Field Inputs
 
-- **`dc.date.*`** — Calendar picker with Today/Clear shortcuts. Stored as ISO `YYYY-MM-DD`. Free-text fallback for partial dates (`YYYY`, `YYYY-MM`) which are normalized to ISO.
+- **`dc.date.*`** — Calendar picker with Today/Clear shortcuts. Stored as ISO `YYYY-MM-DD`. Free-text fallback for partial dates: `YYYY` and `YYYY-MM` are preserved as entered (no invented month or day); `DD/MM/YYYY` is converted to ISO.
 - **`dc.type`** — Dropdown of 29 DCMI Type Vocabulary values (Animation, Article, Book, Thesis, etc.).
 - **`dspace.entity.type`** — Dropdown of 10 DSpace entity types (Publication, Person, OrgUnit, Project, etc.).
 
@@ -245,7 +245,7 @@ Each item shows its filename (`Item 1`, `Item 2`, … by default; renamed to spr
 Click **Import from Spreadsheet** to open the importer modal:
 
 1. **Upload** — Drop or pick a `.csv`, `.tsv`, or `.xlsx` file. The file is parsed client-side (the backend validates the file's format and size before parsing); tab/comma delimiter is auto-detected for CSV/TSV.
-2. **Map & Preview** — Each spreadsheet column is auto-mapped to a DC field using header heuristics (`title`/`thesis`/`report` → `dc.title`; `author`/`submitted by`/`supervisor` → `dc.contributor.author`; `date`/`submission` → `dc.date.issued`; etc.). Override any column's mapping via the searchable dropdown. Required: provide a **Collection Handle** (e.g., `123456789/1`).
+2. **Map & Preview** — Each spreadsheet column is auto-mapped to a DC field using header heuristics (`title`/`thesis`/`report` → `dc.title`; `author`/`submitted by`/`supervisor` → `dc.contributor.author`; `date`/`submission` → `dc.date.issued`; etc.). Override any column's mapping via the searchable dropdown. Multiple names in one cell: separate with `;` ("Lastname, Firstname" stays intact). Dates are converted to ISO 8601 (`YYYY-MM-DD`; day-first `DD/MM/YYYY` understood; `YYYY`/`YYYY-MM` preserved). Required: provide a **Collection Handle** (e.g., `123456789/1`).
 3. **Import** — The first 100 mapped items are shown in a live preview; click **Import N items** to commit.
 
 If the file has rows with mismatched column counts, an amber warning appears at the top of the mapping step.

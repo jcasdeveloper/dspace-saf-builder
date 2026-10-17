@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { fadeIn } from "@/lib/animations";
 import DatePicker from "./DatePicker";
+import { isDateField } from "@/lib/metadata-fields";
 import { DC_TYPE_VALUES } from "@/data/dc-type-values";
 import { ENTITY_TYPE_VALUES } from "@/data/entity-type-values";
 import type { MetadataEntry } from "../types";
@@ -23,7 +24,7 @@ interface FieldRowProps {
 }
 
 function FieldRow({ header, values, onFieldChange }: FieldRowProps) {
-  const isDateField = header.includes(".date") || header.endsWith(".date") || header === "date";
+  const isDate = isDateField(header);
   const isTypeField = header === "dc.type";
   const isEntityTypeField = header === "dspace.entity.type";
 
@@ -88,7 +89,7 @@ function FieldRow({ header, values, onFieldChange }: FieldRowProps) {
                   ))}
                 </SelectContent>
               </Select>
-            ) : isDateField ? (
+            ) : isDate ? (
               <DatePicker
                 value={entry.value}
                 onChange={(date) => handleValueChange(index, date)}

@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import type { MappingConfig, FileMetadata, MetadataEntry } from "../types";
+import { isDateField, isNameField, splitNames } from "./metadata-fields";
 
 export interface ParsedSpreadsheet {
   headers: string[];
@@ -116,7 +117,12 @@ export async function parseExcel(buffer: ArrayBuffer): Promise<ParsedSpreadsheet
 
   const cellToString = (cell: unknown): string => {
     if (cell === null || cell === undefined) return "";
-    if (cell instanceof Date) return cell.toISOString();
+    if (cell instanceof Date) {
+      const y = cell.getFullYear();
+      const m = String(cell.getMonth() + 1).padStart(2, "0");
+      const d = String(cell.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
     if (typeof cell === "object") {
       const r = cell as { text?: unknown; richText?: Array<{ text?: unknown }> };
       if (typeof r.text === "string") return r.text;
@@ -191,47 +197,99 @@ export function autoMapColumn(header: string): string | null {
   return null;
 }
 
-const AUTHOR_FIELDS = new Set([
-  "dc.contributor.author",
-]);
+const MONTHS: Record<string, string> = {
+  jan: "01", january: "01",
+  feb: "02", february: "02",
+  mar: "03", march: "03",
+  apr: "04", april: "04",
+  may: "05",
+  jun: "06", june: "06",
+  jul: "07", july: "07",
+  aug: "08", august: "08",
+  sep: "09", sept: "09", september: "09",
+  oct: "10", october: "10",
+  nov: "11", november: "11",
+  dec: "12", december: "12",
+};
 
-const DATE_FIELDS = new Set([
-  "dc.date.issued",
-  "dc.date.created",
-  "dc.date.available",
-  "dc.date.submitted",
-  "dc.date.accepted",
-  "dc.date.modified",
-  "dc.date.copyright",
-]);
+export interface InterpretedDate {
+  value: string;
+  interpreted: boolean;
+}
 
-const TRIM_PATTERN = /^\s+|\s+$/g;
+export function interpretDate(raw: string): InterpretedDate {
+  const trimmed = raw.trim();
+  if (!trimmed) return { value: "", interpreted: false };
 
-function normalizeDate(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-
-  // Already ISO-8601
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-
-  // Year only: "2014"
-  if (/^\d{4}$/.test(trimmed)) return `${trimmed}-01-01`;
-
-  // Year-month: "2014-06" or "June 2014" or "Jun 2014"
-  const yearMonthMatch = trimmed.match(/^(\d{4})-(\d{1,2})$/);
-  if (yearMonthMatch) return `${yearMonthMatch[1]}-${yearMonthMatch[2].padStart(2, "0")}-01`;
-
-  // Try parsing with Date constructor
-  const date = new Date(trimmed);
-  if (!isNaN(date.getTime())) {
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return { value: trimmed, interpreted: true };
   }
 
-  // If all else fails, return raw value (will show as empty in DatePicker)
-  return "";
+  const isoDateTime = trimmed.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoDateTime) {
+    return { value: isoDateTime[1], interpreted: true };
+  }
+
+  if (/^\d{4}$/.test(trimmed)) {
+    return { value: trimmed, interpreted: true };
+  }
+
+  const yearMonth = trimmed.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yearMonth) {
+    const m = Number(yearMonth[2]);
+    if (m >= 1 && m <= 12) {
+      return { value: `${yearMonth[1]}-${String(m).padStart(2, "0")}`, interpreted: true };
+    }
+    return { value: trimmed, interpreted: false };
+  }
+
+  const numeric = trimmed.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  if (numeric) {
+    let day = Number(numeric[1]);
+    let month = Number(numeric[2]);
+    if (day <= 12 && month > 12) {
+      [day, month] = [month, day];
+    }
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return {
+        value: `${numeric[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        interpreted: true,
+      };
+    }
+    return { value: trimmed, interpreted: false };
+  }
+
+  const monthYear = trimmed.match(/^([A-Za-z]{3,9})\.?\s+(\d{4})$/);
+  if (monthYear) {
+    const m = MONTHS[monthYear[1].toLowerCase()];
+    if (m) return { value: `${monthYear[2]}-${m}`, interpreted: true };
+  }
+
+  const dayMonthYear = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\.?\,?\s+(\d{4})$/);
+  if (dayMonthYear) {
+    const m = MONTHS[dayMonthYear[2].toLowerCase()];
+    const d = Number(dayMonthYear[1]);
+    if (m && d >= 1 && d <= 31) {
+      return {
+        value: `${dayMonthYear[3]}-${m}-${String(d).padStart(2, "0")}`,
+        interpreted: true,
+      };
+    }
+  }
+
+  const monthDayYear = trimmed.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2})\,?\s+(\d{4})$/);
+  if (monthDayYear) {
+    const m = MONTHS[monthDayYear[1].toLowerCase()];
+    const d = Number(monthDayYear[2]);
+    if (m && d >= 1 && d <= 31) {
+      return {
+        value: `${monthDayYear[3]}-${m}-${String(d).padStart(2, "0")}`,
+        interpreted: true,
+      };
+    }
+  }
+
+  return { value: trimmed, interpreted: false };
 }
 
 export function applyMapping(
@@ -243,7 +301,6 @@ export function applyMapping(
 
   for (const row of parsed.rows) {
     const fields: Record<string, MetadataEntry[]> = {};
-    const authorValues: string[] = [];
 
     for (let i = 0; i < parsed.headers.length; i++) {
       const mapping = mappings.find((m) => m.columnName === parsed.headers[i]);
@@ -254,28 +311,24 @@ export function applyMapping(
 
       const metadataField = mapping.metadataField;
 
-      if (AUTHOR_FIELDS.has(metadataField)) {
-        const parts = cellValue
-          .split(/[,;]/)
-          .map((s) => s.replace(TRIM_PATTERN, ""))
-          .filter((s) => s.length > 0 && !s.match(/^\d+$/));
-        authorValues.push(...parts);
-      } else if (DATE_FIELDS.has(metadataField)) {
-        const normalized = normalizeDate(cellValue);
-        if (normalized) {
+      if (isNameField(metadataField)) {
+        const names = splitNames(cellValue);
+        if (names.length > 0) {
           if (!fields[metadataField]) fields[metadataField] = [];
-          fields[metadataField].push({ value: normalized });
+          for (const name of names) {
+            fields[metadataField].push({ value: name });
+          }
         }
+      } else if (isDateField(metadataField)) {
+        const { value } = interpretDate(cellValue);
+        if (!fields[metadataField]) fields[metadataField] = [];
+        fields[metadataField].push({ value });
       } else {
         if (!fields[metadataField]) {
           fields[metadataField] = [];
         }
         fields[metadataField].push({ value: cellValue });
       }
-    }
-
-    if (authorValues.length > 0) {
-      fields["dc.contributor.author"] = authorValues.map((v) => ({ value: v }));
     }
 
     const hasContent = Object.keys(fields).length > 0;

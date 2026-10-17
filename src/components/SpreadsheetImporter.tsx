@@ -24,8 +24,10 @@ import {
   parseSpreadsheetFile,
   autoMapColumn,
   applyMapping,
+  interpretDate,
 } from "@/lib/spreadsheet-parser";
 import type { ParsedSpreadsheet } from "@/lib/spreadsheet-parser";
+import { isNameField, isDateField } from "@/lib/metadata-fields";
 import type { MappingConfig, FileMetadata } from "../types";
 
 interface SpreadsheetImporterProps {
@@ -35,8 +37,6 @@ interface SpreadsheetImporterProps {
 }
 
 type Step = "upload" | "mapping";
-
-const AUTHOR_LIKE_FIELDS = new Set(["dc.contributor.author"]);
 
 function SpreadsheetImporter({
   collectionHandle: defaultCollectionHandle,
@@ -115,9 +115,15 @@ function SpreadsheetImporter({
       .filter((m) => m.metadataField && requiredFields.includes(m.metadataField))
       .map((m) => m.metadataField);
 
-    const authorColumns = mappings
-      .filter((m) => m.metadataField && AUTHOR_LIKE_FIELDS.has(m.metadataField))
+    const nameColumns = mappings
+      .filter((m) => m.metadataField && isNameField(m.metadataField))
       .map((m) => ({ name: m.columnName, idx: parsed.headers.indexOf(m.columnName) }));
+
+    const dateColumns = mappings
+      .filter((m) => m.metadataField && isDateField(m.metadataField))
+      .map((m) => ({ name: m.columnName, idx: parsed.headers.indexOf(m.columnName) }));
+
+    const unparsedDates = new Map<string, number>();
 
     for (let i = 0; i < parsed.rows.length; i++) {
       const row = parsed.rows[i];
@@ -128,13 +134,26 @@ function SpreadsheetImporter({
           warnings.push(`Row ${i + 2}: missing ${req.replace("dc.", "")}`);
         }
       }
-      for (const ac of authorColumns) {
-        if (ac.idx === -1) continue;
-        const val = row[ac.idx]?.trim() || "";
+      for (const nc of nameColumns) {
+        if (nc.idx === -1) continue;
+        const val = row[nc.idx]?.trim() || "";
         if (val && /^\d+$/.test(val)) {
-          warnings.push(`Row ${i + 2}: "${ac.name}" has numeric value "${val}" — skipped`);
+          warnings.push(`Row ${i + 2}: "${nc.name}" has numeric value "${val}" — skipped`);
         }
       }
+      for (const dc of dateColumns) {
+        if (dc.idx === -1) continue;
+        const val = row[dc.idx]?.trim() || "";
+        if (val && !interpretDate(val).interpreted) {
+          unparsedDates.set(dc.name, (unparsedDates.get(dc.name) || 0) + 1);
+        }
+      }
+    }
+
+    for (const [colName, count] of unparsedDates) {
+      warnings.push(
+        `"${colName}": ${count} date value${count !== 1 ? "s" : ""} kept as entered — could not be interpreted as a date`
+      );
     }
   }
 
@@ -268,6 +287,11 @@ function SpreadsheetImporter({
                   {/* Left column: Mapping */}
                   <div className="w-[380px] shrink-0 space-y-1">
                     <p className="text-sm font-medium mb-2">Column Mapping</p>
+                    <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+                      Multiple names in one cell: separate with a semicolon ( ; ). Names like
+                      &ldquo;Lastname, Firstname&rdquo; are kept intact. Dates are converted to ISO 8601
+                      (YYYY-MM-DD); day-first formats such as DD/MM/YYYY are understood.
+                    </p>
 
                     <div className="mb-2">
                       <label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -299,13 +323,13 @@ function SpreadsheetImporter({
                     )}
 
                     {mappings.map((mapping) => {
-                      const isAuthorLike = mapping.metadataField && AUTHOR_LIKE_FIELDS.has(mapping.metadataField);
+                      const isNameLike = mapping.metadataField && isNameField(mapping.metadataField);
                       return (
                         <div key={mapping.columnName} className="flex items-center gap-2">
                           <span className="min-w-0 flex-1 text-xs text-muted-foreground" title={mapping.columnName}>
                             {mapping.columnName}
-                            {isAuthorLike && (
-                              <span className="ml-1 text-[10px] font-medium text-primary">(author)</span>
+                            {isNameLike && (
+                              <span className="ml-1 text-[10px] font-medium text-primary">(name)</span>
                             )}
                           </span>
                           <ArrowRight className="size-3 shrink-0 text-muted-foreground/50" aria-hidden="true" />
