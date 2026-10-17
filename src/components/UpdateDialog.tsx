@@ -118,7 +118,7 @@ function UpdateDialog({ update, onClose }: UpdateDialogProps) {
         </div>
 
         {update.body && phase !== "error" && (
-          <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap">
+          <div className="max-h-[min(24rem,50vh)] overflow-y-auto rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap">
             {update.body}
           </div>
         )}

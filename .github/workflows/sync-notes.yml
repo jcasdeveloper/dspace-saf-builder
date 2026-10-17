@@ -1,0 +1,51 @@
+name: Sync updater notes
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (e.g. v1.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Copy release notes into latest.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download latest.json from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p _sync
+          gh release download "${{ steps.tag.outputs.tag }}" -p latest.json -D _sync --clobber
+
+      - name: Apply the release body as the updater notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ steps.tag.outputs.tag }}" --json body -q .body > _sync/body.md
+          node -e '
+            const fs = require("fs");
+            const json = JSON.parse(fs.readFileSync("_sync/latest.json", "utf8"));
+            json.notes = fs.readFileSync("_sync/body.md", "utf8");
+            fs.writeFileSync("_sync/latest.json", JSON.stringify(json, null, 2));
+          '
+
+      - name: Upload updated latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ steps.tag.outputs.tag }}" _sync/latest.json --clobber
