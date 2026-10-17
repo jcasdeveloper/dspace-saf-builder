@@ -31,13 +31,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p _sync
-          gh release download "${{ steps.tag.outputs.tag }}" -p latest.json -D _sync --clobber
+          gh release download "${{ steps.tag.outputs.tag }}" -p latest.json -D _sync --clobber --repo "${{ github.repository }}"
 
       - name: Apply the release body as the updater notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "${{ steps.tag.outputs.tag }}" --json body -q .body > _sync/body.md
+          gh release view "${{ steps.tag.outputs.tag }}" --json body -q .body --repo "${{ github.repository }}" > _sync/body.md
           node -e '
             const fs = require("fs");
             const json = JSON.parse(fs.readFileSync("_sync/latest.json", "utf8"));
@@ -48,4 +48,4 @@ jobs:
       - name: Upload updated latest.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ steps.tag.outputs.tag }}" _sync/latest.json --clobber
+        run: gh release upload "${{ steps.tag.outputs.tag }}" _sync/latest.json --clobber --repo "${{ github.repository }}"
